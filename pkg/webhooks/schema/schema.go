@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/kubernetes/pkg/apis/core/v1"
 
 	batchv1alpha1 "volcano.sh/apis/pkg/apis/batch/v1alpha1"
+	jobflowv1alpha1 "volcano.sh/apis/pkg/apis/flow/v1alpha1"
 	schedulingv1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 )
 
@@ -126,4 +127,25 @@ func DecodePodGroup(object runtime.RawExtension, resource metav1.GroupVersionRes
 	}
 
 	return &podgroup, nil
+}
+
+// DecodeJobFlow decodes the jobflow using deserializer from the raw object.
+func DecodeJobFlow(object runtime.RawExtension, resource metav1.GroupVersionResource) (*jobflowv1alpha1.JobFlow, error) {
+	jobFlowResource := metav1.GroupVersionResource{
+		Group:    jobflowv1alpha1.SchemeGroupVersion.Group,
+		Version:  jobflowv1alpha1.SchemeGroupVersion.Version,
+		Resource: "jobflows",
+	}
+
+	if resource != jobFlowResource {
+		klog.Errorf("expect resource to be %s", jobFlowResource)
+		return nil, fmt.Errorf("expect resource to be %s", jobFlowResource)
+	}
+
+	jobflow := jobflowv1alpha1.JobFlow{}
+	if _, _, err := Codecs.UniversalDeserializer().Decode(object.Raw, nil, &jobflow); err != nil {
+		return nil, err
+	}
+
+	return &jobflow, nil
 }
