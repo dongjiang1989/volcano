@@ -258,6 +258,18 @@ func (jf *jobflowcontroller) loadJobTemplateAndSetJob(jobFlow *v1alpha1flow.JobF
 		return err
 	}
 
+	var spec v1alpha1.JobSpec
+	// patch object
+	flowPatch, err := getFlowsPatchByName(jobFlow, flowName)
+	if err == nil && flowPatch != nil {
+		spec, err = patchObjects(jobTemplate.Spec, flowPatch.Spec)
+		if err != nil {
+			return err
+		}
+	} else {
+		spec = jobTemplate.Spec
+	}
+
 	*job = v1alpha1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -271,7 +283,7 @@ func (jf *jobflowcontroller) loadJobTemplateAndSetJob(jobFlow *v1alpha1flow.JobF
 				CreatedByJobFlow:     GenerateObjectString(jobFlow.Namespace, jobFlow.Name),
 			},
 		},
-		Spec:   jobTemplate.Spec,
+		Spec:   spec,
 		Status: v1alpha1.JobStatus{},
 	}
 

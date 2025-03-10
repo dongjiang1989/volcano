@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -428,6 +429,7 @@ func TestLoadJobTemplateAndSetJobFunc(t *testing.T) {
 		OwnerReference []metav1.OwnerReference
 		Annotations    map[string]string
 		Labels         map[string]string
+		Spec           v1alpha1.JobSpec
 		Err            error
 	}
 	flag := true
@@ -476,6 +478,111 @@ func TestLoadJobTemplateAndSetJobFunc(t *testing.T) {
 					CreatedByJobTemplate: GenerateObjectString("default", "jobtemplate"),
 					CreatedByJobFlow:     GenerateObjectString("default", "jobflow"),
 				},
+				Spec: v1alpha1.JobSpec{},
+				Err:  nil,
+			},
+		},
+		{
+			name: "LoadJobTemplateAndSetJob with patch success case",
+			args: args{
+				jobFlow: &jobflowv1alpha1.JobFlow{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "jobflow",
+						Namespace: "default",
+					},
+					Spec: jobflowv1alpha1.JobFlowSpec{
+						Flows: []jobflowv1alpha1.Flow{
+							{
+								Name: "jobtemplate",
+								Patch: &jobflowv1alpha1.Patch{
+									Spec: v1alpha1.JobSpec{
+										Tasks: []v1alpha1.TaskSpec{
+											{
+												Name: "test",
+												Template: v1.PodTemplateSpec{
+													Spec: v1.PodSpec{
+														Containers: []v1.Container{
+															{
+																Name:  "container1",
+																Image: "nginx:latest",
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								DependsOn: nil,
+							},
+						},
+						JobRetainPolicy: jobflowv1alpha1.Retain,
+					},
+				},
+				flowName: "jobtemplate",
+				jobName:  getJobName("jobflow", "jobtemplate"),
+				job:      &v1alpha1.Job{},
+				jobTemplate: &jobflowv1alpha1.JobTemplate{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "jobtemplate",
+						Namespace: "default",
+					},
+					Spec: v1alpha1.JobSpec{
+						Tasks: []v1alpha1.TaskSpec{
+							{
+								Name: "test",
+								Template: v1.PodTemplateSpec{
+									Spec: v1.PodSpec{
+										Containers: []v1.Container{
+											{
+												Name:  "container1",
+												Image: "nginx:v1.12",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Status: jobflowv1alpha1.JobTemplateStatus{},
+				},
+			},
+			want: wantRes{
+				OwnerReference: []metav1.OwnerReference{
+					{
+						APIVersion:         helpers.JobFlowKind.Group + "/" + helpers.JobFlowKind.Version,
+						Kind:               helpers.JobFlowKind.Kind,
+						Name:               "jobflow",
+						UID:                "",
+						Controller:         &flag,
+						BlockOwnerDeletion: &flag,
+					},
+				},
+				Annotations: map[string]string{
+					CreatedByJobTemplate: GenerateObjectString("default", "jobtemplate"),
+					CreatedByJobFlow:     GenerateObjectString("default", "jobflow"),
+				},
+				Labels: map[string]string{
+					CreatedByJobTemplate: GenerateObjectString("default", "jobtemplate"),
+					CreatedByJobFlow:     GenerateObjectString("default", "jobflow"),
+				},
+				Spec: v1alpha1.JobSpec{
+					Tasks: []v1alpha1.TaskSpec{
+						{
+							Name: "test",
+							Template: v1.PodTemplateSpec{
+								Spec: v1.PodSpec{
+									Containers: []v1.Container{
+										{
+											Name:  "container1",
+											Image: "nginx:latest",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 				Err: nil,
 			},
 		},
@@ -498,7 +605,10 @@ func TestLoadJobTemplateAndSetJobFunc(t *testing.T) {
 				t.Error("not expected job Annotations")
 			}
 			if !equality.Semantic.DeepEqual(tt.args.job.Labels, tt.want.Labels) {
-				t.Error("not expected job Annotations")
+				t.Error("not expected job Labels")
+			}
+			if !equality.Semantic.DeepEqual(tt.args.job.Spec, tt.want.Spec) {
+				t.Error("not expected job Spec")
 			}
 		})
 	}
@@ -539,6 +649,73 @@ func TestDeployJobFunc(t *testing.T) {
 							Namespace: "default",
 						},
 						Spec:   v1alpha1.JobSpec{},
+						Status: jobflowv1alpha1.JobTemplateStatus{},
+					},
+				},
+			},
+			want: nil,
+		},
+
+		{
+			name: "DeployJob with patch success case",
+			args: args{
+				jobFlow: &jobflowv1alpha1.JobFlow{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "jobflow",
+						Namespace: "default",
+					},
+					Spec: jobflowv1alpha1.JobFlowSpec{
+						Flows: []jobflowv1alpha1.Flow{
+							{
+								Name: "jobtemplate",
+								Patch: &jobflowv1alpha1.Patch{
+									Spec: v1alpha1.JobSpec{
+										Tasks: []v1alpha1.TaskSpec{
+											{
+												Name: "test",
+												Template: v1.PodTemplateSpec{
+													Spec: v1.PodSpec{
+														Containers: []v1.Container{
+															{
+																Name:  "container1",
+																Image: "nginx:latest",
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+								DependsOn: nil,
+							},
+						},
+						JobRetainPolicy: jobflowv1alpha1.Retain,
+					},
+				},
+				jobTemplateList: []*jobflowv1alpha1.JobTemplate{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "jobtemplate",
+							Namespace: "default",
+						},
+						Spec: v1alpha1.JobSpec{
+							Tasks: []v1alpha1.TaskSpec{
+								{
+									Name: "test",
+									Template: v1.PodTemplateSpec{
+										Spec: v1.PodSpec{
+											Containers: []v1.Container{
+												{
+													Name:  "container1",
+													Image: "nginx:v1.12",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 						Status: jobflowv1alpha1.JobTemplateStatus{},
 					},
 				},
