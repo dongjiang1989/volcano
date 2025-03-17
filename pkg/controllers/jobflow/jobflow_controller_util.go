@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
@@ -76,6 +77,10 @@ func patchObjects(job, patch batch.JobSpec) (batch.JobSpec, error) {
 		job.MinAvailable = patch.MinAvailable
 	}
 
+	if len(patch.Volumes) > 0 {
+		job.Volumes = patchVolumes(job.Volumes, patch.Volumes)
+	}
+
 	if len(patch.Tasks) > 0 {
 		tasks, err := patchTasks(job.Tasks, patch.Tasks)
 		if err != nil {
@@ -115,6 +120,28 @@ func patchObjects(job, patch batch.JobSpec) (batch.JobSpec, error) {
 	return job, nil
 }
 
+func patchVolumes(volumes, patchs []batch.VolumeSpec) []batch.VolumeSpec {
+	ret := make([]batch.VolumeSpec, len(volumes))
+	for index, v := range volumes {
+		ret[index] = v
+	}
+	for _, patch := range patchs {
+		flag := false
+		for index, v := range volumes {
+			if v.MountPath == patch.MountPath {
+				ret[index] = patch
+				flag = true
+			}
+		}
+
+		if flag == false {
+			ret = append(ret, patch)
+		}
+	}
+
+	return ret
+}
+
 func patchTasks(tasks, patchs []batch.TaskSpec) ([]batch.TaskSpec, error) {
 	ret := make([]batch.TaskSpec, len(tasks))
 	if len(patchs) > len(tasks) {
@@ -127,75 +154,167 @@ func patchTasks(tasks, patchs []batch.TaskSpec) ([]batch.TaskSpec, error) {
 		ret[index] = *task.DeepCopy()
 	}
 
-	for index, patch := range patchs {
-		if patch.Name != "" {
-			ret[index].Name = patch.Name
-		}
-
-		if patch.Replicas > 0 {
-			ret[index].Replicas = patch.Replicas
-		}
-
-		// container
-		if len(patch.Template.Spec.Containers) > 0 {
-			for i, container := range patch.Template.Spec.Containers {
-				if container.Image != "" {
-					ret[index].Template.Spec.Containers[i].Image = container.Image
+	for _, patch := range patchs {
+		flag := false
+		for index, t := range tasks {
+			if t.Name == patch.Name {
+				if patch.Replicas > 0 {
+					ret[index].Replicas = patch.Replicas
 				}
 
-				if len(container.Command) > 0 {
-					ret[index].Template.Spec.Containers[i].Command = container.Command
+				// Volume
+				if len(patch.Template.Spec.Volumes) > 0 {
+					ret[index].Template.Spec.Volumes = patchPodVolumes(ret[index].Template.Spec.Volumes, patch.Template.Spec.Volumes)
 				}
 
-				if len(container.Args) > 0 {
-					ret[index].Template.Spec.Containers[i].Args = container.Args
+				// container
+				if len(patch.Template.Spec.Containers) > 0 {
+					containers := make([]corev1.Container, len(ret[index].Template.Spec.Containers))
+					for i, v := range ret[index].Template.Spec.Containers {
+						containers[i] = v
+					}
+					for _, container := range patch.Template.Spec.Containers {
+						flag1 := false
+						for j, c := range ret[index].Template.Spec.Containers {
+							if c.Name == container.Name {
+								if container.Image != "" {
+									containers[j].Image = container.Image
+								}
+
+								if len(container.Command) > 0 {
+									containers[j].Command = container.Command
+								}
+
+								if len(container.Args) > 0 {
+									containers[j].Args = container.Args
+								}
+
+								if len(container.Env) > 0 {
+									containers[j].Env = container.Env
+								}
+
+								if len(container.VolumeMounts) > 0 {
+									containers[j].VolumeMounts = patchPodVolumeMounts(containers[j].VolumeMounts, container.VolumeMounts)
+								}
+
+								flag1 = true
+							}
+						}
+						if flag1 == false {
+							containers = append(containers, container)
+						}
+					}
+					ret[index].Template.Spec.Containers = containers
 				}
 
-				if len(container.Env) > 0 {
-					ret[index].Template.Spec.Containers[i].Env = container.Env
+				// init container
+				if len(patch.Template.Spec.InitContainers) > 0 {
+					containers := make([]corev1.Container, len(ret[index].Template.Spec.InitContainers))
+					for i, v := range ret[index].Template.Spec.InitContainers {
+						containers[i] = v
+					}
+					for _, container := range patch.Template.Spec.InitContainers {
+						flag1 := false
+						for j, c := range ret[index].Template.Spec.InitContainers {
+							if c.Name == container.Name {
+								if container.Image != "" {
+									containers[j].Image = container.Image
+								}
+
+								if len(container.Command) > 0 {
+									containers[j].Command = container.Command
+								}
+
+								if len(container.Args) > 0 {
+									containers[j].Args = container.Args
+								}
+
+								if len(container.Env) > 0 {
+									containers[j].Env = container.Env
+								}
+
+								if len(container.VolumeMounts) > 0 {
+									containers[j].VolumeMounts = patchPodVolumeMounts(containers[j].VolumeMounts, container.VolumeMounts)
+								}
+
+								flag1 = true
+							}
+						}
+						if flag1 == false {
+							containers = append(containers, container)
+						}
+					}
+					ret[index].Template.Spec.InitContainers = containers
 				}
+
+				if patch.MinAvailable != nil {
+					ret[index].MinAvailable = patch.MinAvailable
+				}
+
+				if len(patch.Policies) > 0 {
+					ret[index].Policies = patch.Policies
+				}
+
+				if patch.MaxRetry > 0 {
+					ret[index].MaxRetry = patch.MaxRetry
+				}
+
+				if patch.DependsOn != nil {
+					ret[index].DependsOn = patch.DependsOn
+				}
+
+				flag = true
 			}
-
 		}
 
-		// init container
-		if len(patch.Template.Spec.InitContainers) > 0 {
-			for i, container := range patch.Template.Spec.InitContainers {
-				if container.Image != "" {
-					ret[index].Template.Spec.InitContainers[i].Image = container.Image
-				}
-
-				if len(container.Command) > 0 {
-					ret[index].Template.Spec.Containers[i].Command = container.Command
-				}
-
-				if len(container.Args) > 0 {
-					ret[index].Template.Spec.Containers[i].Args = container.Args
-				}
-
-				if len(container.Env) > 0 {
-					ret[index].Template.Spec.Containers[i].Env = container.Env
-				}
-
-			}
-		}
-
-		if patch.MinAvailable != nil {
-			ret[index].MinAvailable = patch.MinAvailable
-		}
-
-		if len(patch.Policies) > 0 {
-			ret[index].Policies = patch.Policies
-		}
-
-		if patch.MaxRetry > 0 {
-			ret[index].MaxRetry = patch.MaxRetry
-		}
-
-		if patch.DependsOn != nil {
-			ret[index].DependsOn = patch.DependsOn
+		if flag == false {
+			return ret, fmt.Errorf("patch.spec.task not in job template taskSpec: patchs %v", patchs)
 		}
 	}
 
 	return ret, nil
+}
+
+func patchPodVolumes(volumes, patchs []corev1.Volume) []corev1.Volume {
+	ret := make([]corev1.Volume, len(volumes))
+	for index, v := range volumes {
+		ret[index] = v
+	}
+	for _, patch := range patchs {
+		flag := false
+		for index, v := range volumes {
+			if v.Name == patch.Name {
+				ret[index] = patch
+				flag = true
+			}
+		}
+
+		if flag == false {
+			ret = append(ret, patch)
+		}
+	}
+
+	return ret
+}
+
+func patchPodVolumeMounts(volumes, patchs []corev1.VolumeMount) []corev1.VolumeMount {
+	ret := make([]corev1.VolumeMount, len(volumes))
+	for index, v := range volumes {
+		ret[index] = v
+	}
+	for _, patch := range patchs {
+		flag := false
+		for index, v := range volumes {
+			if v.Name == patch.Name {
+				ret[index] = patch
+				flag = true
+			}
+		}
+
+		if flag == false {
+			ret = append(ret, patch)
+		}
+	}
+
+	return ret
 }

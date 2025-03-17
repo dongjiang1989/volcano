@@ -19,6 +19,8 @@ package jobflow
 import (
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	batch "volcano.sh/apis/pkg/apis/batch/v1alpha1"
@@ -117,6 +119,277 @@ func TestGetJobFlowNameByJob(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := getJobFlowNameByJob(tt.args.job); got != tt.want {
 				t.Errorf("getJobFlowNameByJob() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPatchVolumes(t *testing.T) {
+	type args struct {
+		volumes []batch.VolumeSpec
+		patchs  []batch.VolumeSpec
+	}
+	tests := []struct {
+		name string
+		args args
+		want []batch.VolumeSpec
+	}{
+		{
+			name: "TestPatchInVolumes",
+			args: args{
+				volumes: []batch.VolumeSpec{
+					{
+						MountPath:       "/aa/aa",
+						VolumeClaimName: "aa",
+					},
+					{
+						MountPath:       "/aa/bb",
+						VolumeClaimName: "bb",
+					},
+				},
+				patchs: []batch.VolumeSpec{
+					{
+						MountPath:       "/aa/aa",
+						VolumeClaimName: "cc",
+					},
+				},
+			},
+			want: []batch.VolumeSpec{
+				{
+					MountPath:       "/aa/aa",
+					VolumeClaimName: "cc",
+				},
+				{
+					MountPath:       "/aa/bb",
+					VolumeClaimName: "bb",
+				},
+			},
+		},
+		{
+			name: "TestPatchNotInVolumes",
+			args: args{
+				volumes: []batch.VolumeSpec{
+					{
+						MountPath:       "/aa/aa",
+						VolumeClaimName: "aa",
+					},
+					{
+						MountPath:       "/aa/bb",
+						VolumeClaimName: "bb",
+					},
+				},
+				patchs: []batch.VolumeSpec{
+					{
+						MountPath:       "/aa/cc",
+						VolumeClaimName: "cc",
+					},
+				},
+			},
+			want: []batch.VolumeSpec{
+				{
+					MountPath:       "/aa/aa",
+					VolumeClaimName: "aa",
+				},
+				{
+					MountPath:       "/aa/bb",
+					VolumeClaimName: "bb",
+				},
+				{
+					MountPath:       "/aa/cc",
+					VolumeClaimName: "cc",
+				},
+			},
+		},
+		{
+			name: "TestPatchNotInVolumesTwo",
+			args: args{
+				volumes: []batch.VolumeSpec{},
+				patchs: []batch.VolumeSpec{
+					{
+						MountPath:       "/aa/cc",
+						VolumeClaimName: "cc",
+					},
+				},
+			},
+			want: []batch.VolumeSpec{
+				{
+					MountPath:       "/aa/cc",
+					VolumeClaimName: "cc",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := patchVolumes(tt.args.volumes, tt.args.patchs)
+			if !equality.Semantic.DeepEqual(got, tt.want) {
+				t.Errorf("PatchVolumes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPatchTasks(t *testing.T) {
+	type args struct {
+		tasks  []batch.TaskSpec
+		patchs []batch.TaskSpec
+	}
+	tests := []struct {
+		name string
+		args args
+		want []batch.TaskSpec
+		err  bool
+	}{
+		{
+			name: "TestPatchInVolumes",
+			args: args{
+				tasks: []batch.TaskSpec{
+					{
+						Name:     "aa",
+						Replicas: 3,
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Volumes: []corev1.Volume{
+									{
+										Name: "aaaa",
+									},
+								},
+								Containers: []corev1.Container{
+									{
+										Name:  "container",
+										Image: "nginx:latest1",
+										VolumeMounts: []corev1.VolumeMount{
+											{
+												Name:      "aaaa",
+												MountPath: "/aa/aa/",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name:     "bb",
+						Replicas: 4,
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Volumes: []corev1.Volume{
+									{
+										Name: "bbbb",
+									},
+								},
+								Containers: []corev1.Container{
+									{
+										Name:  "container",
+										Image: "nginx:latest2",
+										VolumeMounts: []corev1.VolumeMount{
+											{
+												Name:      "bbbb",
+												MountPath: "/bb/bb/",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				patchs: []batch.TaskSpec{
+					{
+						Name:     "bb",
+						Replicas: 2,
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Volumes: []corev1.Volume{
+									{
+										Name: "bbbb",
+									},
+								},
+								Containers: []corev1.Container{
+									{
+										Name:  "container",
+										Image: "nginx:latest2",
+										VolumeMounts: []corev1.VolumeMount{
+											{
+												Name:      "bbbbc",
+												MountPath: "/bb/bb/cc/",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: []batch.TaskSpec{
+				{
+					Name:     "aa",
+					Replicas: 3,
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Volumes: []corev1.Volume{
+								{
+									Name: "aaaa",
+								},
+							},
+							Containers: []corev1.Container{
+								{
+									Name:  "container",
+									Image: "nginx:latest1",
+									VolumeMounts: []corev1.VolumeMount{
+										{
+											Name:      "aaaa",
+											MountPath: "/aa/aa/",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name:     "bb",
+					Replicas: 2,
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Volumes: []corev1.Volume{
+								{
+									Name: "bbbb",
+								},
+							},
+							Containers: []corev1.Container{
+								{
+									Name:  "container",
+									Image: "nginx:latest2",
+									VolumeMounts: []corev1.VolumeMount{
+										{
+											Name:      "bbbb",
+											MountPath: "/bb/bb/",
+										},
+										{
+											Name:      "bbbbc",
+											MountPath: "/bb/bb/cc/",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			err: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := patchTasks(tt.args.tasks, tt.args.patchs)
+			if (err == nil) == tt.err {
+				t.Errorf("patchTasks() error = %v", err)
+			}
+			if !equality.Semantic.DeepEqual(got, tt.want) {
+				t.Errorf("patchTasks() = %v, want %v", got, tt.want)
 			}
 		})
 	}
