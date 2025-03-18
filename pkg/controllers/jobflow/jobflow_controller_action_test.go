@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -604,9 +605,7 @@ func TestGetAllJobStatusFunc(t *testing.T) {
 				got.JobStatusList[0].RunningHistories[0].StartTimestamp = metav1.Time{}
 				got.JobStatusList[1].RunningHistories[0].StartTimestamp = metav1.Time{}
 			}
-			if !equality.Semantic.DeepEqual(got, tt.want) {
-				t.Errorf("getAllJobStatus() got = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, got, tt.want)
 		})
 	}
 }

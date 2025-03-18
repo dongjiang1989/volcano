@@ -190,4 +190,5 @@ replace (
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.31.3
 	k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.31.3
 	k8s.io/sample-controller => k8s.io/sample-controller v0.31.3
+	volcano.sh/apis => github.com/dongjiang1989/apis v0.0.0-20241203075244-615f9154187c
 )
