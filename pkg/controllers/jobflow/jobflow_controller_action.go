@@ -126,7 +126,7 @@ func (jf *jobflowcontroller) judge(jobFlow *v1alpha1flow.JobFlow, flow v1alpha1f
 // createJob
 func (jf *jobflowcontroller) createJob(jobFlow *v1alpha1flow.JobFlow, flow v1alpha1flow.Flow) error {
 	job := new(v1alpha1.Job)
-	if err := jf.loadJobTemplateAndSetJob(jobFlow, flow.Name, getJobName(jobFlow.Name, flow.Name), job); err != nil {
+	if err := jf.loadJobTemplateAndSetJob(jobFlow, flow, getJobName(jobFlow.Name, flow.Name), job); err != nil {
 		return err
 	}
 	if _, err := jf.vcClient.BatchV1alpha1().Jobs(jobFlow.Namespace).Create(context.Background(), job, metav1.CreateOptions{}); err != nil {
@@ -251,11 +251,15 @@ func getRunningHistories(jobStatusList []v1alpha1flow.JobStatus, job *v1alpha1.J
 	return runningHistories
 }
 
-func (jf *jobflowcontroller) loadJobTemplateAndSetJob(jobFlow *v1alpha1flow.JobFlow, flowName string, jobName string, job *v1alpha1.Job) error {
+func (jf *jobflowcontroller) loadJobTemplateAndSetJob(jobFlow *v1alpha1flow.JobFlow, flow v1alpha1flow.Flow, jobName string, job *v1alpha1.Job) error {
 	// load jobTemplate
-	jobTemplate, err := jf.jobTemplateLister.JobTemplates(jobFlow.Namespace).Get(flowName)
+	jobTemplate, err := jf.jobTemplateLister.JobTemplates(jobFlow.Namespace).Get(flow.Name)
 	if err != nil {
 		return err
+	}
+
+	if flow.MaxRetry != nil {
+		jobTemplate.Spec.MaxRetry = int32(*flow.MaxRetry)
 	}
 
 	*job = v1alpha1.Job{
@@ -263,11 +267,11 @@ func (jf *jobflowcontroller) loadJobTemplateAndSetJob(jobFlow *v1alpha1flow.JobF
 			Name:      jobName,
 			Namespace: jobFlow.Namespace,
 			Labels: map[string]string{
-				CreatedByJobTemplate: GenerateObjectString(jobFlow.Namespace, flowName),
+				CreatedByJobTemplate: GenerateObjectString(jobFlow.Namespace, flow.Name),
 				CreatedByJobFlow:     GenerateObjectString(jobFlow.Namespace, jobFlow.Name),
 			},
 			Annotations: map[string]string{
-				CreatedByJobTemplate: GenerateObjectString(jobFlow.Namespace, flowName),
+				CreatedByJobTemplate: GenerateObjectString(jobFlow.Namespace, flow.Name),
 				CreatedByJobFlow:     GenerateObjectString(jobFlow.Namespace, jobFlow.Name),
 			},
 		},
