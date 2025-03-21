@@ -28,6 +28,8 @@ func (p *runningState) Execute(action v1alpha1.Action) error {
 		return SyncJobFlow(p.jobFlow, func(status *v1alpha1.JobFlowStatus, allJobList int) {
 			if len(status.CompletedJobs) == allJobList {
 				status.State.Phase = v1alpha1.Succeed
+			} else if len(status.FailedJobs) > 0 && len(status.CompletedJobs)+len(status.FailedJobs) == allJobList {
+				status.State.Phase = v1alpha1.Failed
 			}
 		})
 	}
