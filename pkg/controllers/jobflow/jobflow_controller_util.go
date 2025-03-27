@@ -194,7 +194,7 @@ func patchTasks(tasks, patchs []batch.TaskSpec) ([]batch.TaskSpec, error) {
 								}
 
 								if len(container.VolumeMounts) > 0 {
-									containers[j].VolumeMounts = patchPodVolumeMounts(containers[j].VolumeMounts, container.VolumeMounts)
+									containers[j].VolumeMounts = container.VolumeMounts
 								}
 
 								flag1 = true
