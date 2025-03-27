@@ -164,7 +164,7 @@ func patchTasks(tasks, patchs []batch.TaskSpec) ([]batch.TaskSpec, error) {
 
 				// Volume
 				if len(patch.Template.Spec.Volumes) > 0 {
-					ret[index].Template.Spec.Volumes = patchPodVolumes(ret[index].Template.Spec.Volumes, patch.Template.Spec.Volumes)
+					ret[index].Template.Spec.Volumes = patch.Template.Spec.Volumes
 				}
 
 				// container
